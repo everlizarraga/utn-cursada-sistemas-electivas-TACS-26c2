@@ -7,13 +7,13 @@
 
 ### Sobre este documento
 
-**Qué cubre:** qué es el kernel y por qué es la pieza que lo decide todo · la idea que hace posible el container: compartir el kernel en vez de duplicarlo · las dos piezas del truco, **namespaces** (qué ve un proceso) y **cgroups** (cuánto usa) · la comparación final VM vs container · la historia de cómo un truco de administradores de sistemas (LXC, 2008) se convirtió en el estándar de la industria (Docker, 2013) · y por qué en Mac y en Windows hay una VM escondida, mientras que en Linux no.
+**Qué cubre:** qué es el kernel, y de paso dos palabras que todo el mundo usa y casi nadie define — **sistema operativo** y **distribución** · la idea que hace posible el container: compartir el kernel en vez de duplicarlo · las dos piezas del truco, **namespaces** (qué ve un proceso) y **cgroups** (cuánto usa) · la comparación final VM vs container · la historia de cómo un truco de administradores de sistemas (LXC, 2008) se convirtió en el estándar de la industria (Docker, 2013) · y el capítulo del Linux escondido: por qué en Mac y en Windows hay una VM, cómo es por dentro en cada uno (no son iguales), y por qué en Linux no hace falta nada.
 
 **Qué NO cubre:** todavía no aparece la **imagen** (el paquete) ni el Dockerfile — módulo 3. Tampoco los comandos para operar containers — módulo 4. Este módulo es el corazón conceptual de toda la serie: si esto queda firme, el resto son consecuencias.
 
 ### De dónde venís
 
-Del módulo 1 traés: los tres choques de correr procesos sin aislamiento (puertos, versiones, mal vecino) · la VM como solución que aísla perfecto pero cobra caro (recursos cautivos, un sistema operativo por servicio, arranque en minutos) · y la "tercera columna" deseada: aislamiento de VM + costo de proceso + paquete portable. Este módulo entrega las dos primeras. También traés del módulo 1 la definición de una línea del kernel — acá se convierte en protagonista.
+Del módulo 1 traés: los tres choques de correr procesos sin aislamiento (puertos, versiones, mal vecino) · la VM como solución que aísla perfecto pero cobra caro (recursos cautivos, un sistema operativo por servicio, arranque en minutos) · y la "tercera columna" deseada: aislamiento de VM + costo de proceso + paquete portable. Este módulo entrega las dos primeras.
 
 ---
 
@@ -37,10 +37,26 @@ Cuando prendés una computadora, antes que cualquier otra cosa, arranca **el ker
 
 Un proceso no puede escribir en el disco "por su cuenta": le pide al kernel. No puede mandar un paquete de red: le pide al kernel. Hasta para saber qué hora es, le pregunta al kernel. A esos pedidos se les dice **llamadas al sistema**, y son el único puente entre los procesos y el mundo físico.
 
+### 1.1 🔴 Kernel, sistema operativo, distribución: tres palabras que no son sinónimos
+
+Estas tres se usan como intercambiables y no lo son. Definirlas ahora te va a ahorrar confusiones durante toda la serie (y reaparecen con rol estelar en el módulo 3):
+
+- **Kernel:** *un* programa — el núcleo. El motor.
+- **Sistema operativo (SO):** no es un programa, es un **paquete**: el kernel **más todo el séquito** que lo rodea — la *shell* (el programa que te da la terminal), las herramientas básicas (`ls`, `cp`, `cat`…), las librerías del sistema, el gestor de paquetes, los archivos de configuración, a veces el entorno gráfico. El kernel es el motor; el SO es el auto completo.
+- **Distribución (distro):** acá viene la sutileza que casi nadie cuenta — **"Linux", en sentido estricto, es SOLO el kernel.** Nadie usa "Linux pelado": usás Linux más un séquito que alguien eligió, empaquetó y bautizó. Ese paquete-con-nombre es una **distribución**: Ubuntu, Debian, Kali, Alpine. Todas comparten (esencialmente) el mismo kernel Linux; difieren en el ajuar — qué herramientas traen, qué gestor de paquetes usan, qué tan livianas son.
+
+```
+   kernel  =  el motor
+   SO      =  el auto completo (motor + carrocería + tablero + ruedas)
+   distro  =  un auto armado y bautizado por alguien
+              (mismo motor Linux; Ubuntu, Debian y Alpine
+               difieren en todo lo demás)
+```
+
 De acá salen dos consecuencias que explican todo el módulo:
 
 1. **Todo lo que corre en una máquina, corre sobre UN kernel.** El kernel es quien lleva la lista de procesos, quien reparte la memoria, quien sabe qué proceso tiene qué puerto.
-2. **Las VMs del módulo 1 eran caras exactamente por esto:** cada VM traía *su propio kernel* con *su sistema operativo entero* alrededor. Cinco servicios = cinco kernels haciendo cinco veces el mismo trabajo administrativo, cada uno con su factura de memoria y disco.
+2. **Las VMs del módulo 1 eran caras exactamente por esto:** cada VM traía *su propio kernel* con *su SO entero* alrededor. Cinco servicios = cinco kernels haciendo cinco veces el mismo trabajo administrativo, cada uno con su factura de memoria y disco.
 
 ## 2. 🔴 La idea que cambia todo: no dupliques el kernel — hacé que mienta
 
@@ -55,8 +71,8 @@ Eso es un **container**: un proceso normal del host, al que el kernel le constru
    ┌───────┐ ┌───────┐ ┌───────┐        ┌───────┐ ┌───────┐ ┌───────┐
    │ app A │ │ app B │ │ app C │        │ app A │ │ app B │ │ app C │
    ├───────┤ ├───────┤ ├───────┤        │ ○     │ │ ○     │ │ ○     │ ← burbuja
-   │ SO    │ │ SO    │ │ SO    │        └───┬───┘ └───┬───┘ └───┬───┘   (namespaces
-   │ KERNEL│ │ KERNEL│ │ KERNEL│            │  procesos comunes │        + cgroups)
+   │ SO    │ │ SO    │ │ SO    │        └───┬───┘ └───┬───┘ └───┬───┘
+   │ KERNEL│ │ KERNEL│ │ KERNEL│            │  procesos comunes │
    └───────┘ └───────┘ └───────┘        ┌───▼───────────▼───────▼───┐
    ═════════ HIPERVISOR ═════════       │      UN SOLO KERNEL       │
    ───────── hardware ───────────       └───────────────────────────┘
@@ -76,6 +92,8 @@ La burbuja tiene dos mitades, y la división es tan limpia que conviene memoriza
 |---|---|---|
 | **Namespaces** | ¿Qué **VE** el proceso? | su lista de procesos, su red, su disco, su hostname |
 | **Cgroups** | ¿Cuánto **USA** el proceso? | tope de memoria, cuota de CPU, límite de disco y red |
+
+> 📌 **Vocabulario oficial de la serie:** de acá en adelante, **burbuja** = el envoltorio aislante completo, namespaces + cgroups. Cuando leas "burbuja", son esas dos piezas trabajando juntas. (Vas a ver más adelante que la mitad-namespaces aparece a veces sola, aislando otras cosas que no son containers — la idea es tan buena que se usa por partes.)
 
 ### 3.1 🔴 Namespaces: cada uno ve su propio mundo
 
@@ -163,36 +181,103 @@ Las piezas del kernel existían y alguien las tenía que empaquetar. La historia
 > 🎓 **Para el parcial, si te preguntan**
 > **¿Qué es LXC y en qué se diferencia de la virtualización tradicional?** LXC (Linux Containers, 2008) fue la primera herramienta que empaquetó namespaces y cgroups: inaugura la virtualización **a nivel de sistema operativo** — aislar procesos compartiendo el kernel — frente a la virtualización **a nivel de hardware** del hipervisor, donde cada VM corre su propio SO. Ahorraba enormes recursos (y costo de nube), pero era complejo, de bajo nivel, orientado a sysadmins; Docker (2013) tomó la misma base y la volvió accesible para desarrolladores, sumando el empaquetado en imágenes.
 
-## 6. 🔴 El detalle que ya viviste: el Linux escondido
+## 6. El Linux escondido: qué hay de verdad en tu máquina
 
-Todo el módulo dice "el kernel" — pero seamos precisos: namespaces y cgroups son mecanismos **del kernel de Linux**. Un container estándar es un proceso *de Linux* con burbuja *de Linux*. Necesita un kernel de Linux abajo, sí o sí.
+Todo el módulo dice "el kernel" — pero seamos precisos: namespaces y cgroups son mecanismos **del kernel de Linux**. Un container estándar es un proceso *de Linux* con burbuja *de Linux*. Necesita un kernel de Linux abajo, sí o sí. Ahora veamos qué significa eso en cada sistema — porque no es igual en todos, y las diferencias enseñan.
 
-Ahora hacé la cuenta según tu máquina:
+### 6.1 🔴 En Linux nativo: nada que agregar
+
+Si tu máquina corre Ubuntu, Debian o cualquier distro, el kernel correcto **ya es el tuyo**. Docker se instala y corre nativo: tus containers son procesos de tu propio kernel. Un solo kernel en toda la máquina. Fin de la historia — y por eso los servidores del mundo real, donde viven los containers en producción, son Linux.
+
+### 6.2 🔴 En Mac: la VM privada de Docker Desktop
+
+El kernel de macOS se llama **Darwin**, y no tiene namespaces ni cgroups de Linux. Solución: Docker Desktop se trae **su propia VM** — mínima, con un Linux pelado adentro — y todos tus containers viven ahí:
 
 ```
-   EN LINUX (Ubuntu nativo)      EN MAC                        EN WINDOWS
-  ┌────────────────────────┐   ┌────────────────────────┐   ┌────────────────────────┐
-  │ containers             │   │ containers             │   │ containers             │
-  │     │                  │   │     │                  │   │     │                  │
-  │ kernel LINUX ✓ directo │   │ ┌───▼────────────────┐ │   │ ┌───▼────────────────┐ │
-  └────────────────────────┘   │ │ VM mínima con LINUX│ │   │ │ WSL 2: VM liviana  │ │
-   nada que agregar            │ └────────────────────┘ │   │ │ con LINUX          │ │
-                               │ kernel de macOS        │   │ └────────────────────┘ │
-                               │ (Darwin — no sirve)    │   │ kernel de Windows      │
-                               └────────────────────────┘   │ (NT — no sirve)        │
-                                                            └────────────────────────┘
+   ┌─────────────────────────────────────────────┐
+   │                  TU MAC                     │
+   │           kernel Darwin ← kernel #1         │
+   │                                             │
+   │   Docker Desktop (app)                      │
+   │   ┌─────────────────────────────────────┐   │
+   │   │  SU VM privada, mínima              │   │
+   │   │  kernel LINUX ← kernel #2           │   │
+   │   │   ┌────────┐ ┌────────┐ ┌────────┐  │   │
+   │   │   │ contnr │ │ contnr │ │ contnr │  │   │
+   │   │   │   A    │ │   B    │ │   C    │  │   │
+   │   │   └────────┘ └────────┘ └────────┘  │   │
+   │   └─────────────────────────────────────┘   │
+   │    la VM existe SOLO para Docker: la app    │
+   │    la prende al abrir y la apaga al salir   │
+   └─────────────────────────────────────────────┘
 ```
 
-- **Linux:** el kernel correcto ya está. Docker corre nativo, sin nada en el medio.
-- **Mac:** el kernel de macOS (se llama Darwin) no tiene namespaces ni cgroups de Linux. Docker Desktop levanta **una** VM mínima con Linux, y **todos** tus containers viven adentro de ella.
-- **Windows:** ídem con el kernel NT. La VM liviana es **WSL 2**, y Docker Desktop se crea ahí su propia distribución (`docker-desktop` — la viste, o la vas a ver, en `wsl -l -v`).
+Esa VM es **privada de la app**: no la ves, no la administrás, no le podés meter otras cosas — Docker Desktop es dueño de su propio edificio. Para Darwin, toda la VM es (a fines prácticos) un proceso más; para tus containers, el kernel Linux de adentro es "el kernel del host" del que habló todo este módulo. Dos kernels en total: Darwin + Linux.
 
-"Pará — ¿no era que las VMs eran lo caro?" Sí, y la cuenta sigue cerrando: es **una sola** VM, mínima, compartida por todos tus containers — no una por aplicación. Un edificio entero parado sobre un único terreno alquilado. 1 VM + 100 containers sigue siendo incomparablemente más barato que 100 VMs.
+La **evidencia** ya la tenés del setup: `docker version` muestra `Client: darwin` y `Server: linux` — tu terminal es de macOS, pero quien responde del otro lado es el Linux de la VM.
 
-Y si hiciste el setup, ya tenés la **evidencia en tu propia máquina**: en Mac, `docker version` te mostró `Client: darwin` y `Server: linux` — tu terminal es de macOS, pero quien te responde del otro lado es un Linux. En Windows, la distro `docker-desktop` apareció en tu lista de WSL sin que vos la instalaras. El "Linux escondido" no es una metáfora: está corriendo ahí ahora.
+> 🕳️ **Madriguera — Colima**
+> En Mac existe una alternativa open source a Docker Desktop llamada **Colima**: levanta su **propia** VM con Linux (otra, separada — no adentro de la de Docker Desktop) y corre el motor de Docker ahí. Pueden convivir instaladas; el cliente `docker` sabe a cuál hablarle mediante *contextos* — la línea `Context:` que viste en `docker version`. Para esta serie, Docker Desktop alcanza y sobra.
+> *Volvé al camino.*
+
+### 6.3 🟡 En Windows: WSL 2, el edificio público
+
+El kernel de Windows se llama **NT** y tampoco sirve. Pero Microsoft tomó otro camino, más interesante — y entenderlo evita una confusión clásica que conviene desactivar de frente: **no hay VM adentro de otra VM.** Vamos por partes.
+
+**Qué es WSL.** *Windows Subsystem for Linux*: el mecanismo oficial de Microsoft para correr Linux dentro de Windows. Vino en dos modos que conviven (por eso la columna `VERSION` cuando listás distros): **WSL 1** no tenía kernel de Linux — era un *traductor*: el kernel NT atendía los pedidos de los programas Linux haciéndose pasar por un kernel Linux; ingenioso, pero imitación incompleta, sin namespaces ni cgroups reales — **Docker no puede correr ahí**. **WSL 2** abandona la imitación: una **VM liviana** administrada por Windows, con un **kernel de Linux real** adentro (compilado por Microsoft) más la plomería mínima. Ojo: esa VM **no es "un Ubuntu"** — es Linux pelado, sin distro. Las distros van aparte, y acá está la pieza clave:
+
+**Qué es una "distro" en WSL — y qué no es.** Recordá la sección 1.1: distro = kernel + ajuar. En WSL, el kernel ya lo pone la VM, uno solo, compartido. Entonces los fabricantes (Canonical para Ubuntu, etc.) empaquetan versiones especiales de sus distros **sin el kernel**: básicamente el disco — el árbol de archivos completo con todo el séquito (`apt`, herramientas, configuración). Cuando "instalás Ubuntu en WSL", descargás ese disco y lo enchufás. Cuando lo abrís, WSL lanza sus procesos **sobre el kernel compartido, cada distro dentro de su propia burbuja** — su vista de archivos, sus procesos, su mundo. Una distro en WSL **no es una VM: es un disco enchufado más una burbuja.**
+
+```
+   ┌────────────────────────────────────────────────────────┐
+   │                      WINDOWS                           │
+   │                 kernel NT ← kernel #1                  │
+   │                                                        │
+   │   LA VM LIVIANA DE WSL 2 (una sola, del sistema)       │
+   │   ┌────────────────────────────────────────────────┐   │
+   │   │      kernel LINUX ← kernel #2 (y último)       │   │
+   │   │                                                │   │
+   │   │  ┌─ burbuja ─┐ ┌─ burbuja ─┐ ┌── burbuja ───┐  │   │
+   │   │  │  Ubuntu   │ │  Debian   │ │docker-desktop│  │   │
+   │   │  │ tu distro │ │ (si la    │ │ el motor de  │  │   │
+   │   │  │ (disco +  │ │  tenés)   │ │ Docker, y    │  │   │
+   │   │  │  mundo    │ │           │ │ adentro:     │  │   │
+   │   │  │  propio)  │ │           │ │ ┌────┐┌────┐ │  │   │
+   │   │  │           │ │           │ │ │ A  ││ B  │ │  │   │
+   │   │  │           │ │           │ │ └────┘└────┘ │  │   │
+   │   │  │           │ │           │ │  containers  │  │   │
+   │   │  └───────────┘ └───────────┘ └──────────────┘  │   │
+   │   └────────────────────────────────────────────────┘   │
+   └────────────────────────────────────────────────────────┘
+```
+
+Leé el diagrama con calma: **una** VM, **un** kernel de Linux, y varias burbujas colgadas de él. La distro `docker-desktop` que Docker Desktop crea al instalarse no es "otra VM adentro" — es *otro disco enchufado al mismo edificio*, una burbuja vecina de tu Ubuntu. Y adentro de esa burbuja, el motor de Docker crea las burbujas de tus containers. **Burbujas anidadas, como carpetas dentro de carpetas:** al kernel no le cuesta nada, porque una burbuja no es una máquina — es contabilidad: anotaciones en los libros del kernel sobre qué le muestra a quién. Anidar VMs sería duplicar motores (carísimo, doble trabajo); anidar burbujas es agregar renglones a un registro.
+
+Total de kernels en tu Windows con Docker andando: **dos** — NT y el Linux de WSL 2. Igual que en Mac: dos y solo dos.
+
+🟢 Una honestidad de alcance: los detalles finos de cómo Microsoft implementa el aislamiento entre distros son cocina interna de ellos (y usa sobre todo la mitad-*vista* de la burbuja: los límites de recursos en WSL se configuran para la VM entera, no por distro). Lo que importa acá es la **lógica** — y es exactamente la de este módulo.
+
+### 6.4 🟡 La asimetría Mac/Windows — y el mapa final
+
+Los dos sistemas resolvieron el mismo problema (no tengo kernel Linux) con filosofías opuestas:
+
+- **En Windows, el sustrato es público.** WSL 2 es una funcionalidad *del sistema*, hecha para que cualquiera use Linux para lo que quiera. Es tuya: la ves, la administrás (`wsl -l -v` y compañía). Docker Desktop es **un inquilino más** que enchufa su distro al edificio que ya existía.
+- **En Mac, no existe edificio público.** Cada herramienta se trae **su VM privada**. La de Docker Desktop existe solo para Docker y la administra la app: sin distros, sin lista, sin `wsl` equivalente — la VM corre el motor directamente.
+
+| | **Ubuntu nativo** | **Mac** | **Windows** |
+|---|---|---|---|
+| Kernels totales | 1 (Linux) | 2 (Darwin + Linux) | 2 (NT + Linux) |
+| ¿Dónde está el Linux? | Es el nativo | VM **privada** de Docker Desktop | La VM **única y pública** de WSL 2 |
+| ¿El sustrato es tuyo o de la app? | Tuyo | De la app (invisible) | Tuyo (visible: `wsl ...`) |
+| ¿Capa "distro"? | — | No: la VM corre el motor directo | Sí: burbujas — Ubuntu, docker-desktop… |
+| Tus containers viven en… | Tu propio kernel | La VM de Docker Desktop | La burbuja `docker-desktop` |
+
+**Y el broche, que no es casualidad:** mirá de nuevo cómo WSL 2 organiza sus distros — mundos separados, cada uno creyéndose solo, todos sobre un kernel compartido. Es **el mismo truco de este módulo**, aplicado por Microsoft a otra cosa. Tu notebook con Windows demuestra la tesis de la serie dos veces a la vez: una en cómo WSL aísla distros, otra en cómo Docker aísla containers. La idea "compartir el kernel es barato y alcanza para aislar" no ganó una batalla — se comió a la industria entera, Windows incluido.
+
+**"¿Pará — no era que las VMs eran lo caro?"** Sí, y la cuenta sigue cerrando en los dos sistemas: es **una sola** VM, mínima, compartida por todos tus containers — no una por aplicación. Un edificio entero sobre un único terreno alquilado. 1 VM + 100 containers sigue siendo incomparablemente más barato que 100 VMs.
 
 > 🎓 **Para el parcial, si te preguntan**
-> **¿Por qué Docker necesita una VM en Mac y Windows, y en Linux no?** Porque un container comparte el kernel del sistema donde corre, y los containers estándar son de Linux: dependen de namespaces y cgroups, que son mecanismos del kernel de Linux. macOS y Windows tienen otros kernels, así que Docker Desktop levanta una única VM liviana con Linux (LinuxKit en Mac, WSL 2 en Windows) donde corren todos los containers. En Linux el kernel correcto ya está y Docker corre nativo. Sigue siendo eficiente porque es una sola VM compartida, no una por aplicación.
+> **¿Por qué Docker necesita una VM en Mac y Windows, y en Linux no?** Porque un container comparte el kernel del sistema donde corre, y los containers estándar son de Linux: dependen de namespaces y cgroups, que son mecanismos del kernel de Linux. macOS (kernel Darwin) y Windows (kernel NT) no los tienen, así que Docker Desktop usa una única VM liviana con Linux — privada de la app en Mac, la VM compartida de WSL 2 en Windows — donde corren todos los containers. En Linux el kernel correcto ya está y Docker corre nativo. Sigue siendo eficiente porque es una sola VM para todo, no una por aplicación.
 
 ## 7. 🔴 Síntesis: la tercera columna, conseguida a medias
 
@@ -216,20 +301,22 @@ Las dos preguntas son la misma pregunta, y su respuesta es el invento más impor
 *Sin mirar el material. Las que no salgan marcan qué sección releer. (Las respuestas no están acá a propósito.)*
 
 1. ¿Qué es el kernel y qué cosas administra? ¿Qué es una llamada al sistema?
-2. "Un container comparte el kernel del host." ¿Qué comparte exactamente, y qué NO comparte?
-3. Namespaces y cgroups: ¿cuál responde "qué ve" y cuál "cuánto usa"? Dá dos ejemplos de cada uno.
-4. Un proceso dentro de un container se ve como PID 1. ¿Qué ve el kernel del host cuando mira ese mismo proceso?
-5. ¿Cómo eliminan los cgroups el efecto bad neighbor? Contá qué pasa ahora con el memory leak del módulo 1.
-6. ¿Qué es el overcommit y qué se gana y se arriesga con él?
+2. ¿Qué diferencia hay entre kernel, sistema operativo y distribución? ¿Qué es "Linux" en sentido estricto?
+3. "Un container comparte el kernel del host." ¿Qué comparte exactamente, y qué NO comparte?
+4. Namespaces y cgroups: ¿cuál responde "qué ve" y cuál "cuánto usa"? Dá dos ejemplos de cada uno. ¿Qué llama esta serie "burbuja"?
+5. Un proceso dentro de un container se ve como PID 1. ¿Qué ve el kernel del host cuando mira ese mismo proceso?
+6. ¿Cómo eliminan los cgroups el efecto bad neighbor? ¿Qué es el overcommit y qué se gana y se arriesga con él?
 7. Reconstruí de memoria la tabla VM vs container: qué virtualiza cada uno, kernel, arranque, overhead, recursos, aislamiento.
 8. ¿Por qué LXC (2008) no se masificó y Docker (2013) sí?
 9. ¿Por qué en Mac y Windows hay una VM y en Ubuntu nativo no? ¿Cuántas VMs hacen falta para cien containers?
-10. De la "tercera columna" del módulo 1, ¿qué quedó conseguido y qué falta? ¿Qué pregunta sobre el disco del container quedó abierta?
+10. En Windows con Docker andando: ¿cuántas VMs hay? ¿Cuántos kernels, y cuáles? ¿Qué es la distro `docker-desktop`, y por qué NO es "una VM adentro de otra"?
+11. ¿En qué se diferencia la filosofía de Mac (VM privada de la app) de la de Windows (WSL 2 como sustrato público)?
+12. ¿En qué se parece la forma en que WSL 2 aísla sus distros a la forma en que Docker aísla containers?
 
 ---
 
 ## Qué viene en el Módulo 3
 
-La pregunta quedó servida: el container ve "su propio disco" — ¿qué hay adentro y quién lo puso? La respuesta es la **imagen**: un paquete de solo lectura, armado en **capas apiladas**, que contiene el file system completo que el container va a ver — tu app, su runtime, sus librerías, todo. Vas a conocer el **Dockerfile** (la receta que construye imágenes), vas a entender por qué las capas tienen esos códigos raros (hashes), y va a cerrar de un golpe el hilo más viejo de la serie: "en mi máquina funciona" deja de existir cuando la máquina viaja con la app.
+La pregunta quedó servida: el container ve "su propio disco" — ¿qué hay adentro y quién lo puso? La respuesta es la **imagen**: un paquete de solo lectura, armado en **capas apiladas**, que contiene el file system completo que el container va a ver — tu app, su runtime, sus librerías, todo. Vas a conocer el **Dockerfile** (la receta que construye imágenes), vas a entender por qué las capas tienen esos códigos raros (hashes), van a volver las **distros** con rol estelar (Ubuntu, Debian y Alpine como puntos de partida de tus imágenes) — y va a cerrar de un golpe el hilo más viejo de la serie: "en mi máquina funciona" deja de existir cuando la máquina viaja con la app.
 
 **FIN DEL MÓDULO 2**

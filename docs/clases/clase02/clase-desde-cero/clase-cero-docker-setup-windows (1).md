@@ -7,11 +7,13 @@
 
 ### Sobre este documento
 
-**Qué cubre:** las cuatro terminales de Windows y cuál vamos a usar (decisión incluida) · qué es WSL y por qué Docker lo necesita · cómo diagnosticar una máquina en estado desconocido (quizás instalaste cosas hace años y no te acordás — este archivo lo contempla) · instalar WSL desde cero si hace falta · el kit de comandos para administrar tus Linux · instalar Docker Desktop · el paso que todo el mundo se olvida · y la verificación de punta a punta.
+**Qué cubre:** las cuatro terminales de Windows y cuál vamos a usar (decisión incluida) · qué es WSL y por qué Docker lo necesita · cómo diagnosticar una máquina en estado desconocido (quizás instalaste cosas hace años y no te acordás — este archivo lo contempla) · instalar WSL desde cero si hace falta · el kit de comandos para administrar tus Linux · instalar Docker Desktop por **dos vías posibles** (elegís una), con una mini-guía de winget para quien no lo conozca · el paso que todo el mundo se olvida · y la verificación de punta a punta.
 
 **Qué NO cubre:** conceptos. Este archivo es instrumental: no hay contenido de parcial, así que no vas a ver marcas 🔴🟡🟢 ni bloques 🎓. Solo ⚠️ (trampas) y 🕳️ (madrigueras).
 
 **Cuándo hacerlo:** cuando quieras, pero **obligatorio antes del módulo 4**. Los módulos 1 a 3 se leen sin nada instalado.
+
+**El orden importa:** WSL primero (secciones 3-5, común a todo), Docker Desktop después (sección 6, con sus dos vías).
 
 ---
 
@@ -35,10 +37,10 @@
 └───────────────────────────────────────────────────────────────┘
 ```
 
-Dos piezas: **WSL 2** (un Linux de verdad corriendo dentro de Windows) y **Docker Desktop** (la app, que usa ese Linux para hacer vivir a los containers). ¿Por qué Docker necesita un Linux? Versión corta: los containers necesitan un kernel de Linux y Windows no lo tiene. La explicación completa es el módulo 2 — y este setup es, de contrabando, tu primer contacto con ese hecho.
+Dos piezas: **WSL 2** (un Linux de verdad corriendo dentro de Windows) y **Docker Desktop** (la app, que usa ese Linux para hacer vivir a los containers). ¿Por qué Docker necesita un Linux? Versión corta: los containers necesitan un kernel de Linux y Windows no lo tiene. La explicación completa — incluido qué es exactamente una "distro" acá adentro y por qué `docker-desktop` no es "una VM adentro de otra" — está en el módulo 2, sección 6.3. Este setup es, de contrabando, tu primer contacto con ese hecho.
 
 - **WSL (Windows Subsystem for Linux):** el mecanismo oficial de Microsoft para correr Linux dentro de Windows, sin dual boot ni VirtualBox. La versión que importa es **WSL 2**, que trae un kernel Linux real dentro de una VM muy liviana e integrada al sistema. Docker requiere la 2.
-- **Distribución (distro):** un "sabor" de Linux — Ubuntu, Debian, etc. Dentro de WSL podés tener varias instaladas a la vez, cada una con sus archivos y su mundo propio.
+- **Distribución (distro):** un "sabor" de Linux — Ubuntu, Debian, etc. Dentro de WSL podés tener varias instaladas a la vez, cada una con sus archivos y su mundo propio, todas compartiendo el mismo kernel de la VM.
 
 ## 2. Las cuatro terminales de Windows — y la decisión
 
@@ -47,7 +49,7 @@ Windows tiene cuatro consolas posibles, y no dan lo mismo:
 | Terminal | Qué es en realidad | ¿Para esta serie? |
 |---|---|---|
 | **CMD** | La consola histórica de Windows; su propio lenguaje (`dir`, `%cd%`) | ❌ Fuera del material |
-| **PowerShell** | La consola moderna de Windows; otro lenguaje más (`${PWD}`, otras comillas) | ❌ Fuera del material — **excepto** para administrar WSL (sección 3-5), que es territorio Windows |
+| **PowerShell** | La consola moderna de Windows; otro lenguaje más (`${PWD}`, otras comillas) | ❌ Fuera del material — **excepto** para administrar WSL (secciones 3-5), que es territorio Windows |
 | **Git Bash** | Un *imitador* de terminal Linux sobre Windows. Buen imitador — pero traduce rutas por debajo, y con Docker esa "ayuda" rompe | ⚠️ Compatible con dos asteriscos (recuadro abajo) |
 | **Terminal de Ubuntu (WSL)** | Un **Linux real**. No imita: es bash de verdad, rutas de verdad | ✅ **La recomendada.** Todo el material corre acá tal cual está escrito |
 
@@ -97,7 +99,7 @@ Con eso, saltá directo a la sección 5 (el kit) o 6 (instalar Docker).
 2. ```console
    > wsl --install
    ```
-   Un solo comando: instala WSL 2 completo **y** Ubuntu como distro por defecto.
+   Un solo comando: instala WSL 2 completo **y** Ubuntu como distro por defecto (Ubuntu es solo el default — con `-d` se elige otra).
 3. **Reiniciá la máquina** cuando lo pida.
 4. Al volver, se abre sola una consola de Ubuntu que termina la instalación (si no se abre, abrila vos: menú inicio → "Ubuntu"). Te pide crear un **usuario y contraseña de Linux** — es una identidad nueva, independiente de tu usuario de Windows. Usuario en minúsculas.
 
@@ -133,19 +135,56 @@ $ exit                            # salir de la sesión y volver a PowerShell
 > Cada distro guarda su mundo en un disco virtual (un archivo grande en tu disco de Windows). Desde adentro de Ubuntu, tus discos de Windows aparecen montados en `/mnt/c`, `/mnt/d`, etc. Alcanza con saber que existe.
 > *Volvé al camino.*
 
-## 6. Instalar Docker Desktop
+## 6. Instalar Docker Desktop — dos caminos, elegí UNO
 
-**Vía A — descarga directa:** **docker.com** → descarga para Windows. La mayoría de las PCs son **x86_64/AMD64** (elegí ese); si tu notebook es de las nuevas con ARM, elegí ARM64. ¿Dudas? Configuración → Sistema → Información → "Tipo de sistema". Ejecutá el instalador; si te ofrece la opción **"Use WSL 2 instead of Hyper-V"**, dejala tildada. Puede pedir cerrar sesión al final.
+Con WSL listo, falta la app. Hay dos formas, y **las dos terminan exactamente en el mismo lugar**. Nadie hace las dos:
 
-**Vía B — con winget** (PowerShell):
-```console
-> winget install Docker.DockerDesktop
-```
-- **winget:** el gestor de paquetes oficial de Windows — el equivalente de Homebrew. Si `winget --version` responde, lo tenés (viene con Windows moderno).
+- **Vía A — la clásica:** ir al sitio oficial, descargar, instalar. La de toda la vida, cero requisitos. Si querés instalar Docker y seguir con tu vida, esta.
+- **Vía B — con winget:** instalar con una línea de comando. Si ya conocés winget, andá directo al comando. Si no, la sección 6.2 te lo presenta en un minuto — es el pariente de Windows del Homebrew de los usuarios de Mac.
+
+### 6.1 Vía A — Instalación clásica (descarga directa)
+
+**docker.com** → descarga para Windows. La mayoría de las PCs son **x86_64/AMD64** (elegí ese); si tu notebook es de las nuevas con ARM, elegí ARM64. ¿Dudas? Configuración → Sistema → Información → "Tipo de sistema". Ejecutá el instalador; si te ofrece la opción **"Use WSL 2 instead of Hyper-V"**, dejala tildada. Puede pedir cerrar sesión al final. Seguí en la sección 7.
 
 > 🕳️ **Madriguera — Hyper-V**
 > El hipervisor propio de Windows, el camino que Docker usaba antes de WSL 2. Hoy el camino es WSL 2 y no hay que tocar nada de Hyper-V.
 > *Volvé al camino.*
+
+### 6.2 Vía B — Instalación con winget
+
+**¿Qué es winget? (30 segundos).** El gestor de paquetes **oficial de Microsoft**: un catálogo desde el que instalás y actualizás programas con una línea de comando, sin peregrinar por sitios web. Viene incluido en Windows 10/11 moderno. A diferencia de Homebrew, no distingue entre programas de consola y aplicaciones con ventana — instala todo por igual, más simple.
+
+**¿Ya lo tengo?** En PowerShell:
+
+```console
+> winget --version
+v1.x.x               # ← responde con versión = lo tenés
+```
+
+Si no responde: se instala/actualiza gratis desde Microsoft Store buscando **"App Installer"**.
+
+**El estilo, en cuatro comandos:**
+
+```console
+> winget search docker            # buscar en el catálogo
+> winget install Git.Git          # instalar Git, por ejemplo
+> winget list                     # qué hay instalado en la máquina
+> winget upgrade --all            # actualizar todo lo actualizable
+```
+
+> 🕳️ **Madriguera — winget a fondo**
+> Fuentes, manifiestos, la Store como backend… nada de eso hace falta acá. Si te dio curiosidad, explorálo en otro chat.
+> *Volvé al camino.*
+
+**Instalar Docker Desktop:**
+
+```console
+> winget install Docker.DockerDesktop
+```
+
+Aceptá lo que pida. Puede requerir cerrar sesión al final.
+
+### 6.3 Primer arranque (común a las dos vías)
 
 Abrí **Docker Desktop**, aceptá los términos, y esperá a que el ícono de la **ballenita** en la bandeja del sistema (abajo a la derecha, quizás dentro del `^`) se quede quieto: animada = arrancando, quieta = lista.
 
@@ -169,7 +208,7 @@ Ahora corré de nuevo el diagnóstico en PowerShell:
   docker-desktop    Running         2        # ← ¡apareció una distro nueva que vos no instalaste!
 ```
 
-Esa `docker-desktop` la creó Docker Desktop para sí mismo: es **el Linux donde van a vivir tus containers**. Tu propia máquina te está mostrando en una lista el "Linux escondido" del que habla el módulo 2. (Si además aparece `docker-desktop-data`, es de versiones anteriores — mismo rol, repartido en dos.) ⚠️ No las toques ni las elimines con `--unregister`: son de Docker, él las administra.
+Esa `docker-desktop` la creó Docker Desktop para sí mismo: es la burbuja donde vive el motor de Docker — y adentro de ella, tus containers. **No es otra VM**: es una distro más, enchufada al mismo kernel compartido que tu Ubuntu (módulo 2, sección 6.3 — burbujas anidadas, como carpetas). Tu propia máquina te está mostrando en una lista el "Linux escondido" de la serie. (Si además aparece `docker-desktop-data`, es de versiones anteriores — mismo rol, repartido en dos.) ⚠️ No las toques ni las elimines con `--unregister`: son de Docker, él las administra.
 
 ## 9. La cuenta (Docker ID) — opcional, y sin misterio
 
@@ -224,7 +263,7 @@ Corrélo de nuevo: ya no dice `Unable to find image` — la imagen quedó local 
 ## ✅ Checklist de salida
 
 - [ ] `wsl -l -v` muestra Ubuntu en VERSION 2
-- [ ] Docker Desktop instalado y la ballenita llega a quedarse quieta
+- [ ] Docker Desktop instalado (por la vía que sea — son equivalentes) y la ballenita llega a quedarse quieta
 - [ ] La integración con Ubuntu está prendida (Settings → Resources → WSL integration)
 - [ ] En la **terminal de Ubuntu**: `docker version` muestra la sección Server
 - [ ] En la **terminal de Ubuntu**: `docker run hello-world` imprime el saludo
