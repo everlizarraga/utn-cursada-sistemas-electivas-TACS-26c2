@@ -7,7 +7,7 @@
 
 ### Sobre este documento
 
-**Qué cubre:** qué pasa exactamente cuando un container nace — incluida la respuesta a la pregunta del módulo 3: la **capa read-write** · el build y el run con tus manos: `build`, `run`, `ps`, `logs`, `exec`, `stop`, `rm` · el binding de puertos · la vida adentro de la burbuja (y la comprobación en vivo del PID 1 del módulo 2) · `CMD` vs `ENTRYPOINT` · y el **ciclo de vida** completo del container, con la diferencia crucial entre parar y borrar.
+**Qué cubre:** qué pasa exactamente cuando un container nace — incluida la respuesta a la pregunta del módulo 3: la **capa read-write** · el build y el run con tus manos: `build`, `run`, `ps`, `logs`, `exec`, `stop`, `rm` · el binding de puertos · la vida adentro de la burbuja (y la comprobación en vivo del PID 1 del módulo 2) · `CMD` vs `ENTRYPOINT`, incluidas **las dos formas de escribirlos** y la shell fantasma que una de ellas esconde · el **ciclo de vida** completo, con sus comandos sobre cada flecha · y qué pasa con tus containers cuando cerrás Docker, suspendés la máquina o la apagás.
 
 **Qué NO cubre:** la caché de build y el costo del copy-on-write (módulo 5), la persistencia de verdad y las redes entre containers (módulo 6).
 
@@ -23,7 +23,7 @@ Del módulo 3 traés: imagen = pila de capas congeladas + ficha técnica · el b
 
 Cuando ejecutás `docker run mi-app`, pasan cuatro cosas, en este orden y en milisegundos:
 
-1. Docker busca la **imagen** (local; si no está, la baja del registry).
+1. Docker busca la **imagen** — local; si no está, la baja del **registry** (el depósito de imágenes del módulo 3 — Docker Hub por defecto; su desarrollo completo llega en el módulo 7).
 2. El kernel arma la **burbuja**: namespaces (su vista) + cgroups (sus límites).
 3. El namespace de mount monta la **pila congelada** de la imagen… **más una capa nueva, finita, VACÍA y con permiso de escritura encima: la capa read-write.**
 4. Se ejecuta el comando anotado en la ficha (`CMD`) — y ese proceso es el **PID 1** del container.
@@ -183,7 +183,9 @@ f3a91c07d2e8   mi-app:1.0    ...  Up 9 minutes               mi-servidor
 65992cf52c5d   hello-world   ...  Exited (0) 3 days ago      loving_ptolemy    # ← también
 ```
 
-Aparecieron **fantasmas**: los hello-world del setup, en estado `Exited`. Acá está, en tu propia máquina, una de las distinciones centrales de todo Docker: **existir no es estar corriendo.** Un container `Exited` es un proceso que terminó *pero cuya capa read-write y ficha siguen guardadas en disco* — muerto, pero no enterrado. Se puede revivir (`docker start`), inspeccionar, o borrar. Por eso tu dashboard decía "Showing 2 items" y a la vez "No containers are running": dos existentes, cero corriendo.
+Aparecieron **fantasmas**: los hello-world del setup, en estado `Exited`. Acá está, en tu propia máquina, una de las distinciones centrales de todo Docker: **existir no es estar corriendo.** Un container `Exited` es un proceso que terminó *pero cuya capa read-write y ficha siguen guardadas en disco* — muerto, pero no enterrado. Se puede revivir, inspeccionar, o borrar definitivamente — los tres, con sus comandos, en la **sección 6**; ahora seguimos explorando a los vivos.
+
+🟡 *De paso, el dashboard de Docker Desktop cuenta esta misma historia con puntitos: en la lista de **imágenes**, el círculo verde lleno significa "in use" — al menos un container nació de ella, corriendo o no (es el gemelo visual de la columna `U` de la consola moderna); el círculo vacío, que ninguno. Y en la lista de **containers**, el circulito se pinta solo cuando el container está `Up` — tus fantasmas lo tienen apagado.*
 
 **¿Y qué dice mi app?** Su salida no se pierde por correr despegada:
 
@@ -246,9 +248,19 @@ root    36  ...  ps aux             # ← este mismo comando
 
 **Tres procesos. Ese es el universo entero visto desde adentro.** Tu app es el PID 1 — el primer proceso de un mundo que existe solo para ella — y no hay rastro de tu navegador, tus otros containers, ni los cientos de procesos reales de la máquina. La doble identidad del módulo 2, comprobada con tus manos.
 
-🖥️ **Según tu sistema — la otra mitad de la comprobación.** ¿Y desde afuera? En un **Linux nativo**, `ps aux | grep app.py` en la terminal del host te muestra ese mismo proceso con un PID alto cualquiera — las dos identidades a la vez. En **Mac y Windows**, si lo probás en tu terminal… no aparece nada. No es magia ni error: tu terminal es de macOS/Windows, y el proceso no vive ahí — vive **adentro de la VM** (módulo 2, sección 6). El "host" del container es el Linux escondido, no tu escritorio. Que no lo encuentres es, en sí mismo, la prueba de dónde vive.
+Salí con `exit`: se cierra **tu** bash (que era un proceso extra) y volvés a la terminal de tu máquina. **El container sigue corriendo** — su PID 1, la app, ni se enteró de tu visita.
 
-Salí con `exit`. Detalle importante: **salir de tu bash no mata al container** — tu shell era un proceso *extra*; el container vive mientras viva su PID 1, que sigue siendo la app.
+🖥️ **Según tu sistema — la otra mitad de la comprobación (con la verdad completa).** ¿Y el mismo proceso, visto desde afuera, con su PID alto? Depende de dónde estés parado:
+
+- **Linux nativo:** directo — `ps aux | grep app.py` en tu terminal muestra el proceso con un PID alto cualquiera. Las dos identidades, a la vista.
+- **Mac:** desde tu terminal no vas a ver nada, y **no existe una "terminal de la VM" a la que entrar**: la VM de Docker Desktop está sellada a propósito — sin shell para vos, sin acceso (la asimetría del módulo 2: sustrato privado de la app). El proceso vive ahí adentro, invisible desde tu escritorio.
+- **Windows:** ídem — tu terminal de Ubuntu tampoco lo ve, porque `docker-desktop` es otra burbuja hermana, con su propio namespace de PID.
+
+Que no lo encuentres **es, en sí mismo, la prueba de dónde vive**. El módulo te debe esta claridad: la comprobación directa de la doble identidad es un lujo de Linux nativo.
+
+> 🕳️ **Madriguera — espiar la VM igual, por la ventana de Docker**
+> Hay un truco elegante si la curiosidad te puede: `docker run --rm --pid=host busybox ps aux`. Es un container descartable al que `--pid=host` le pincha a propósito la parte-PID de la burbuja: en vez de su listita privada, ve **los procesos del host de Docker** — o sea, de la VM. En la salida vas a encontrar tu `python3 app.py` con su PID alto de verdad. (Baja la imagen `busybox`, ~2 MB.) No lo necesitás para nada de la serie — es puro placer de comprobación.
+> *Volvé al camino.*
 
 ## 5. 🔴 ¿Quién es el PID 1? — CMD, override y ENTRYPOINT
 
@@ -270,43 +282,88 @@ Existe una segunda pieza para controlar el arranque: **`ENTRYPOINT`**. La difere
 | `ENTRYPOINT ["python3"]` | corre `python3` | corre `python3 X Y` — **lo tuyo se suma como argumentos** |
 | Ambos: `ENTRYPOINT ["python3"]` + `CMD ["app.py"]` | corre `python3 app.py` | corre `python3 X Y` — el ejecutable es fijo, CMD era solo el argumento por defecto |
 
-En criollo: **CMD es una sugerencia; ENTRYPOINT es una decisión.** CMD dice "si no pedís otra cosa, corré esto"; ENTRYPOINT dice "esta imagen ES este programa — lo que escribas serán sus argumentos". El combo (tercera fila) es el patrón de las imágenes bien hechas: ejecutable fijo, argumentos por defecto reemplazables. Cuando tengas que decidir para el TP, mirá cómo lo resuelven las imágenes oficiales de tu stack — son la referencia de buenas prácticas que la cátedra espera.
+Ahora, la aclaración que evita el malentendido clásico: cuando están los dos, **no se ejecutan dos cosas**. De las dos anotaciones de la ficha se **ensambla UNA sola línea de comando**, y nace UN solo proceso:
 
-*(Y el porqué del formato de lista `["python3","app.py"]` que quedó pendiente del módulo 3: escrito así, tu programa ES el PID 1 directamente y recibe bien las señales — importa en la sección que sigue. Escrito sin lista, Docker mete una shell en el medio y las señales le llegan a la shell, no a tu app.)*
+```
+   ENTRYPOINT ["python3"]   +   CMD ["app.py"]
+              └───────────┬───────────┘
+                          ▼
+      comando final:  python3 app.py       ← UN proceso: el PID 1
+
+   $ docker run imagen otra.py             ← pasaste argumentos
+                          ▼
+      comando final:  python3 otra.py      ← tus argumentos REEMPLAZARON al CMD;
+                                             el ENTRYPOINT quedó fijo
+```
+
+CMD no "se ejecuta aparte": **aporta el pedazo reemplazable** de esa única línea. Y como las dos son anotaciones en la ficha — no pasos que corren en secuencia — **el orden en que las escribas en el Dockerfile no importa** (la costumbre es ENTRYPOINT arriba, pero funciona igual al revés). En criollo: **CMD es una sugerencia; ENTRYPOINT es una decisión.** El combo (tercera fila) es el patrón de las imágenes bien hechas: ejecutable fijo, argumentos por defecto reemplazables. Para el TP, la referencia de cómo decidirlo son las **imágenes oficiales de tu stack** — las de Docker Hub mantenidas por cada proyecto (la de `node`, la de `python`, la de MySQL…): abrí su Dockerfile publicado y mirá cómo combinan ENTRYPOINT y CMD; ese es el estándar de buenas prácticas que la cátedra espera ver imitado.
+
+### 5.1 🔴 Las dos formas de escribir el CMD — y la shell fantasma
+
+Falta el misterio del formato de lista, prometido desde el módulo 3. El `CMD` (y el `ENTRYPOINT`) se pueden escribir de **dos formas**:
+
+```dockerfile
+CMD ["python3", "app.py"]     # forma LISTA — la que usa esta serie, siempre
+CMD python3 app.py            # forma TEXTO — existe, y esconde un intruso
+```
+
+Parecen iguales. No lo son. Con la forma **texto**, Docker no ejecuta tu comando directamente: lo envuelve — por debajo corre `/bin/sh -c "python3 app.py"`. Ese `sh` es una **shell**: el mismo tipo de programa que atiende tu terminal (un intérprete de comandos) — solo que acá nace *adentro del container*, sin terminal conectada, invisible: un simple proceso intermediario. Y mirá lo que le hace al árbol:
+
+```
+   FORMA LISTA                            FORMA TEXTO
+   ┌──────────────────────────┐           ┌─────────────────────────────────┐
+   │ PID 1: python3 app.py    │           │ PID 1: sh   ← el intermediario  │
+   │        ↑ TU APP manda    │           │   └─ hijo: python3 app.py       │
+   └──────────────────────────┘           │             ↑ tu app, relegada  │
+                                          └─────────────────────────────────┘
+```
+
+¿Y qué importa quién es el PID 1, si la app corre igual? Importa **cuando alguien le habla al PID 1** — y eso es exactamente lo que hace `docker stop`, como vas a ver en la sección 6: le manda un mensaje de "cerrá ordenado". Con la forma lista, el mensaje le llega a **tu app**. Con la forma texto, le llega a la shell intermediaria… que **no se lo reenvía** a tu app — el mensaje muere ahí, tu app nunca se entera, y termina cerrada por la fuerza. Dos aclaraciones para dejarlo redondo: esa shell **no existe en todos los containers** — solo nace si usaste la forma texto (nuestra forma lista = cero intermediarios, tu app es PID 1 directo); y no la confundas con el `bash` del `exec` de la sección 4 — aquel era TU visita interactiva, este es un intruso permanente plantado por la forma de escribir la receta.
 
 > 🎓 **Para el parcial, si te preguntan**
-> **¿Diferencia entre CMD y ENTRYPOINT?** Ambos definen qué se ejecuta al arrancar el container (el PID 1). CMD es el comando por defecto y se **reemplaza por completo** si el usuario pasa un comando en `docker run`. ENTRYPOINT fija el ejecutable principal, y lo que el usuario pase en el `run` se **agrega como argumentos** de ese ejecutable. Se usan combinados: ENTRYPOINT fija el programa y CMD aporta los argumentos por defecto, reemplazables sin tocar el ejecutable.
+> **¿Diferencia entre CMD y ENTRYPOINT?** Ambos son anotaciones de la ficha que definen el comando de arranque (el PID 1) — de las dos se ensambla una única línea. CMD es el comando (o los argumentos) por defecto y se **reemplaza por completo** si el usuario pasa un comando en `docker run`. ENTRYPOINT fija el ejecutable principal, y lo que el usuario pase se **agrega como argumentos**. Combinados: ENTRYPOINT fija el programa, CMD aporta argumentos por defecto reemplazables. Además, conviene la **forma de lista** (`["python3","app.py"]`): ejecuta la app directamente como PID 1; la forma de texto interpone una shell (`sh -c`) que queda como PID 1 y no reenvía las señales — rompiendo el graceful shutdown de `docker stop`.
 
 ## 6. 🔴 El ciclo de vida: parar NO es borrar
 
-Todo lo que viste se ordena en un mapa de estados:
+Antes del mapa, una confesión de `docker run`: **esconde dos pasos**. Existen por separado, y conocerlos ordena todo el diagrama:
+
+```console
+$ docker create --name ensayo -p 8080:8080 mi-app:1.0
+b8e2f4a91c...      # ← ARMA el container: burbuja, capa read-write, ficha... SIN arrancarlo.
+                   #    Queda en estado "Created": existe, nunca vivió.
+
+$ docker start ensayo
+ensayo             # ← y AHORA arranca: lanza el CMD → PID 1 → Running
+```
+
+`docker run` = `create` + `start`, en un solo golpe — y es lo que usa todo el mundo (`create` suelto existe para casos finos; te alcanza con saber que está ahí). Pero mirá el regalo conceptual: **`docker start` "arranca un container ya armado"** — y eso vale igual para uno recién creado que para uno que ya vivió y terminó. Revivir un `Exited` es *literalmente el mismo comando*. Con esas piezas, el mapa completo — cada flecha con su comando:
 
 ```
-                docker run (= create + start)
-                        │
-   ┌─────────┐          ▼            docker pause ▶ ┌────────┐
-   │ created │──────▶ ┌─────────┐ ◀ docker unpause  │ paused │
-   └─────────┘        │ RUNNING │ ◀─────────────────└────────┘
-    (armado, sin      └────┬────┘
-     arrancar)             │  el PID 1 termina (solo, por error,
-        ▲                  │  por Ctrl+C, o por docker stop)
-        │                  ▼
-        │             ┌─────────┐        docker start
-        │             │ EXITED  │────────(revive: mismo container,
-        │             └────┬────┘         misma capa read-write)──▶ RUNNING
-        │                  │
-        │                  │  docker rm
-        │                  ▼
-        │             ┌─────────┐
-        └─── ✗ ────── │ REMOVED │   ← ya no existe: capa read-write
-                      └─────────┘     y ficha, borradas para siempre
+                  docker run  ( = docker create + docker start )
+                                        │
+   ┌─────────┐    docker start    ┌─────▼─────┐    docker pause     ┌────────┐
+   │ CREATED │ ─────────────────▶ │  RUNNING  │ ◀─────────────────▶ │ PAUSED │
+   └─────────┘                    └─────┬─────┘    docker unpause   └────────┘
+        ▲                               │
+        │ docker create                 │  el PID 1 termina:
+     (imagen)                           │  solo · por error · Ctrl+C · docker stop
+                                        ▼
+                                  ┌───────────┐     docker start (¡revive!)
+                                  │  EXITED   │ ───────────────────────▶ RUNNING
+                                  └─────┬─────┘   misma capa read-write,
+                                        │         mismos archivos escritos
+                                        │  docker rm
+                                        ▼
+                                  ┌───────────┐
+                                  │  REMOVED  │  ← capa read-write y ficha:
+                                  └───────────┘    borradas para siempre
 ```
 
 Las transiciones que importan, con sus matices:
 
-**`docker stop mi-servidor`** — el buen final. No desenchufa: le manda al PID 1 una **señal de terminación** (un mensaje del sistema: "cerrá ordenado, por favor"). La app tiene unos segundos de gracia para terminar lo que estaba haciendo — cerrar conexiones, soltar archivos: un **graceful shutdown** (apagado elegante). Si no termina a tiempo, Docker la corta por las malas. Por eso importaba el formato de lista del CMD: la señal tiene que llegarle a TU app, no a una shell intermediaria.
+**`docker stop mi-servidor`** — el buen final. No desenchufa: le manda al PID 1 una **señal de terminación** (un mensaje del sistema: "cerrá ordenado, por favor"). La app tiene unos segundos de gracia para terminar lo que estaba haciendo — cerrar conexiones, soltar archivos: un **graceful shutdown** (apagado elegante). Si no termina a tiempo, Docker la corta por las malas. Y acá cobra sentido la sección 5.1: la señal se la mandan **al PID 1** — si tu CMD está en forma lista, el PID 1 es tu app y el mensaje le llega; si está en forma texto, el PID 1 es la shell fantasma, el mensaje muere en ella, y tu app termina cortada por la fuerza igual. La forma de escribir una línea del Dockerfile decide si tu app muere bien o mal.
 
-**`docker start mi-servidor`** — la resurrección. Un container `Exited` no es un cadáver: es un proceso terminado con su capa read-write **intacta en disco**. `start` lo vuelve a lanzar — mismo container, misma capa, mismos archivos que hubiera escrito. **Parar no pierde datos.**
+**`docker start mi-servidor`** — la resurrección (ya lo conocés de arriba). Un container `Exited` no es un cadáver: es un proceso terminado con su capa read-write **intacta en disco**. `start` lo vuelve a lanzar — mismo container, misma capa, mismos archivos que hubiera escrito. **Parar no pierde datos.**
 
 **`docker rm mi-servidor`** — el entierro. Borra la capa read-write y la ficha. Ahora sí: **todo lo que ese container escribió, desapareció para siempre.** (La imagen no se toca: era compartida y congelada. Podés parir otro container igual — pero nace con la capa read-write VACÍA: es *otro* container.)
 
@@ -316,8 +373,17 @@ La distinción merece marco:
 
 Dos yapas del día a día: `docker run --rm ...` crea un container que **se auto-borra** al terminar (ideal para pruebas de un solo uso — el `ls /app` de la sección 5 merecía un `--rm`), y `docker pause/unpause` congela y descongela un container vivo sin matarlo (existe, se usa poco).
 
+### 6.1 🟡 ¿Y si se apaga todo? — cerrar Docker, suspender, apagar la máquina
+
+La ansiedad legítima: tenés containers corriendo y la vida sigue — cerrás la app, cerrás la tapa, apagás. Qué pasa en cada caso:
+
+- **Cerrás Docker Desktop** (Quit / ⌘Q): Docker **detiene ordenadamente** los containers que corren (señal de terminación, como un `stop`) y apaga la VM. Resultado: todos quedan `Exited`, con sus capas read-write intactas en disco — el disco de la VM es un archivo, y los archivos no se apagan. Al reabrir la app: imágenes impecables (congeladas), containers todos presentes en `docker ps -a`, ninguno corriendo, cero corrupción. Levantás lo que necesites con `docker start`. No arrancan solos por defecto — existe una opción para que lo hagan (*restart policies*), pero no la necesitás en esta serie.
+- **Suspendés la máquina** (cerrar la tapa, reposo): la suspensión congela **todo** en el lugar — la VM incluida, containers incluidos. Al despertar, siguen `Running` como si el tiempo no hubiera pasado. (Único matiz: conexiones de red hacia afuera pueden haberse cortado por el tiempo dormido — para tu desarrollo local, irrelevante.)
+- **Apagás normalmente**: el sistema le pide a cada app que cierre → Docker Desktop hace su apagado ordenado (mismo camino que ⌘Q) → containers `Exited`, datos a salvo, y al prender arrancás donde querías.
+- **Apagado violento** (botón apretado, cuelgue, batería muerta): sin tiempo para el apagado elegante. Los archivos en disco quedan — pero una app agarrada a mitad de una escritura puede dejar esa escritura a medias. Es exactamente la clase de riesgo por el que los graceful shutdowns existen. No le temas: sabé que la diferencia entre "apagar" y "desenchufar" también aplica acá adentro.
+
 > 🎓 **Para el parcial, si te preguntan**
-> **Describí el ciclo de vida de un container.** Created (armado, sin arrancar) → Running (el PID 1 vive; `docker run` = create + start) → Paused (congelado con `pause`, reversible) → Exited (el PID 1 terminó — solo, por error o por `docker stop`, que envía una señal de terminación y da unos segundos de gracia para un graceful shutdown) → Removed (`docker rm` borra la capa read-write y la metadata). Clave: stop conserva la capa read-write y el container puede revivir con `start` sin perder lo escrito; rm la borra irreversiblemente. El container vive exactamente lo que vive su PID 1.
+> **Describí el ciclo de vida de un container.** Created (armado con `docker create`: burbuja, capa read-write y ficha listas, sin arrancar) → Running (`docker start` lanza el CMD como PID 1; `docker run` = create + start) → Paused (congelado con `pause`, reversible) → Exited (el PID 1 terminó — solo, por error o por `docker stop`, que envía una señal de terminación y da unos segundos de gracia para un graceful shutdown) → Removed (`docker rm` borra la capa read-write y la metadata). Claves: stop conserva la capa read-write y el container revive con `start` sin perder lo escrito; rm la borra irreversiblemente; y el container vive exactamente lo que vive su PID 1.
 
 ## 7. 🔴 Síntesis — y las dos cuentas pendientes
 
@@ -327,10 +393,11 @@ Lo que este módulo te deja en las manos:
 |---|---|
 | `docker build -t nombre:tag .` | Cocina la receta de la carpeta actual |
 | `docker run -d --name X -p H:C imagen` | Pare un container: de fondo, con nombre, con puente de puertos |
+| `docker create` / `docker start X` | Los dos pasos escondidos del run: armar / arrancar (start también revive) |
 | `docker ps` / `docker ps -a` | Censo de corriendo / de existentes |
 | `docker logs X` (`-f`) | Lo que el PID 1 dijo por stdout |
 | `docker exec -it X bash` | Entrar a la burbuja de un container vivo |
-| `docker stop X` / `docker start X` | Buen final (datos a salvo) / resurrección |
+| `docker stop X` | Buen final: señal al PID 1, gracia, datos a salvo |
 | `docker rm X` | Entierro: capa read-write y ficha, borradas |
 | `docker run --rm ...` | Container descartable, se auto-borra |
 
@@ -351,15 +418,17 @@ Y quedan dos cuentas abiertas, a propósito:
 3. En `docker build -t mi-app:1.0 .` — ¿qué hace el `-t` y qué significa el punto final?
 4. ¿Qué hace `-d`? ¿Y `-p 8081:8080` — cuál número es la "puerta de calle" y cuál el puerto del container?
 5. ¿Por qué dos containers pueden creer ambos estar en el 8080 sin chocar, pero dos `-p 8080:...` sí chocan? ¿Qué choca exactamente?
-6. Existir ≠ correr: ¿qué es un container `Exited`, qué conserva, y con qué comando se lista? ¿Con cuál se revive?
+6. Existir ≠ correr: ¿qué es un container `Exited`, qué conserva, y con qué comando se lista? ¿Qué indican el círculo verde de una imagen y el circulito de un container en el dashboard?
 7. ¿Qué muestra `docker logs` exactamente? ¿Cuál es la buena práctica de logging para una app en un container?
-8. `docker exec -it X bash`: ¿qué hace, y por qué salir de esa shell no mata al container?
+8. `docker exec -it X bash`: ¿qué hace cada parte, y por qué salir con `exit` no mata al container?
 9. Contá la secuencia completa de la trampa: por qué `ps` no estaba, por qué `apt-get install procps` falló primero, y por qué `apt-get update` lo cura. ¿Cómo se llama el paquete de `ps`?
-10. Desde adentro, tu app es PID 1. ¿Qué ves desde la terminal del host en Linux nativo? ¿Y en Mac/Windows — y por qué esa ausencia es en sí misma una prueba?
-11. CMD vs ENTRYPOINT: ¿qué pasa con cada uno cuando pasás un comando en el `docker run`? ¿Cuál es el patrón combinado y para qué sirve?
-12. ¿Por qué el CMD en formato de lista importa para el `docker stop`? ¿Qué es un graceful shutdown?
-13. Dibujá el ciclo de vida completo con sus transiciones. ¿Qué conserva `stop` y qué destruye `rm`?
-14. ¿Para qué sirve `--rm` y en qué tipo de containers conviene?
+10. Desde adentro, tu app es PID 1. ¿Qué ves desde la terminal del host en Linux nativo? ¿Y en Mac/Windows — por qué no hay "terminal de la VM" a la que entrar, y por qué esa ausencia es en sí misma una prueba?
+11. CMD vs ENTRYPOINT: ¿qué pasa con cada uno cuando pasás un comando en el `docker run`? Cuando están los dos, ¿cuántos procesos nacen y cómo se ensambla el comando final? ¿Importa el orden de las dos líneas en el Dockerfile?
+12. Las dos formas de escribir el CMD: ¿cuál interpone una shell, qué es exactamente esa shell, cuándo existe y cuándo no, y por qué arruina el `docker stop`?
+13. `docker run` esconde dos pasos: ¿cuáles, qué hace cada uno, y por qué "revivir" un Exited es uno de esos mismos comandos?
+14. Dibujá el ciclo de vida completo con el comando de cada transición. ¿Qué conserva `stop` y qué destruye `rm`?
+15. ¿Qué pasa con tus containers al cerrar Docker Desktop? ¿Al suspender la máquina? ¿En un apagado normal vs uno violento?
+16. ¿Para qué sirve `--rm` y en qué tipo de containers conviene?
 
 ---
 

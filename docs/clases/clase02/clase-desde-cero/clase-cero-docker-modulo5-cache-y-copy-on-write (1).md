@@ -161,6 +161,11 @@ CONTAINER ID   IMAGE            ...   NAMES   SIZE
 #    vacía. Lo "virtual" es imagen + capa (todo lo que el container ve).
 
 $ docker exec cow sh -c 'echo "." >> /grande.bin'      # ← UN punto al final del archivo
+# └─ Dos notas de forma: `exec` sin -it ejecuta el comando y vuelve — la shell
+#    interactiva del módulo 4 solo hace falta para quedarse adentro. ¿Y el `sh -c`?
+#    El `>>` ("agregá al final de") es sintaxis DE shell: exec ejecuta comandos a
+#    secas, sin shell — así que acá la invocamos NOSOTROS, a propósito y explícita.
+#    (La misma shell que el módulo 4 §5.1 te enseñó a NO dejar que se cuele sola.)
 
 $ docker ps -s
 CONTAINER ID   IMAGE            ...   NAMES   SIZE
