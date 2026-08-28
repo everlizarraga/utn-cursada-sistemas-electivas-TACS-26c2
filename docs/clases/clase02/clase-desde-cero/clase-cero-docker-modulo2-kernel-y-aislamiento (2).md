@@ -43,7 +43,7 @@ Estas tres se usan como intercambiables y no lo son. Definirlas ahora te va a ah
 
 - **Kernel:** *un* programa — el núcleo. El motor.
 - **Sistema operativo (SO):** no es un programa, es un **paquete**: el kernel **más todo el séquito** que lo rodea — la *shell* (el programa que te da la terminal), las herramientas básicas (`ls`, `cp`, `cat`…), las librerías del sistema, el gestor de paquetes, los archivos de configuración, a veces el entorno gráfico. El kernel es el motor; el SO es el auto completo.
-- **Distribución (distro):** acá viene la sutileza que casi nadie cuenta — **"Linux", en sentido estricto, es SOLO el kernel.** Nadie usa "Linux pelado": usás Linux más un séquito que alguien eligió, empaquetó y bautizó. Ese paquete-con-nombre es una **distribución**: Ubuntu, Debian, Kali, Alpine. Todas comparten (esencialmente) el mismo kernel Linux; difieren en el ajuar — qué herramientas traen, qué gestor de paquetes usan, qué tan livianas son.
+- **Distribución (distro):** acá viene la sutileza que casi nadie cuenta — **"Linux", en sentido estricto, es SOLO el kernel.** Nadie usa "Linux pelado": usás Linux más un séquito que alguien eligió, empaquetó y bautizó. Ese paquete-con-nombre es una **distribución**: Ubuntu, Debian, Kali, Alpine. Todas comparten (esencialmente) el mismo kernel Linux; difieren en el equipamiento — qué herramientas traen, qué gestor de paquetes usan, qué tan livianas son.
 
 ```
    kernel  =  el motor
@@ -152,7 +152,7 @@ Con las dos piezas sobre la mesa, la comparación completa — probablemente la 
 
 | | **Máquina virtual** | **Container** |
 |---|---|---|
-| Qué virtualiza | El **hardware** (hipervisor) | El **sistema operativo** (namespaces + cgroups) |
+| Dónde ocurre el truco | **Debajo del kernel**: el hipervisor simula hardware | **Adentro del kernel**: namespaces + cgroups simulan la vista |
 | Kernel | **Propio** — uno por VM | **Compartido** — el del host, para todos |
 | Qué es, en el fondo | Una computadora completa simulada | Un **proceso** del host con una burbuja |
 | Arranque | Minutos (bootea un SO entero) | **Milisegundos** (es lanzar un proceso) |
@@ -160,6 +160,15 @@ Con las dos piezas sobre la mesa, la comparación completa — probablemente la 
 | Recursos | **Reservados** al crearla — cautivos aunque no se usen | **Limitados** con cgroups — flexibles, sin cautiverio |
 | Densidad en un host | Unas pocas | **Cientos** |
 | Aislamiento | Total — a nivel hardware | Fuerte — a nivel kernel |
+
+⚠️ **Cuidado con cómo se lee el nombre estándar de la industria.** A lo que hace el container se le dice "virtualización **a nivel de** sistema operativo", y el parseo correcto **no** es "virtualizar EL sistema operativo" (fabricar un SO falso, kernel incluido — eso no existe acá, y con la definición de SO de la sección 1.1 sería contradictorio). Es: virtualización hecha **a la altura del** sistema operativo — el truco ocurre *adentro* del kernel, usando sus propios mecanismos, en vez de *debajo* de él como hace el hipervisor. Compará dónde vive la mentira en cada caso:
+
+| | ¿Dónde ocurre el truco? | ¿Qué es lo falso? | ¿Qué es real? |
+|---|---|---|---|
+| **VM** | Debajo del kernel: el hipervisor simula hardware | El hardware que la VM ve | El kernel y el SO de la VM — completos, de verdad; por eso pesan |
+| **Container** | Adentro del kernel: namespaces + cgroups | La **vista** del proceso: su lista de procesos, su red, su disco | El kernel (uno, compartido, jamás simulado) y el hardware |
+
+En el container, nada de lo falso incluye un kernel: **el kernel es el mago, nunca el truco.** Lo que se simula es el mundo alrededor del proceso — la sensación de máquina propia.
 
 🟡 Una honestidad sobre la última fila: el aislamiento de la VM sigue siendo *más* fuerte. Una VM es una computadora aparte a todo efecto; un container confía en que el kernel compartido mienta bien — y un kernel compartido es, por definición, una superficie de contacto entre vecinos. Por eso en escenarios donde conviven clientes que no se tienen ninguna confianza, las VMs siguen teniendo su lugar. Para el caso normal — tus servicios, tu equipo, tu empresa — el aislamiento del container sobra, y la diferencia de costo es abismal.
 
@@ -226,7 +235,7 @@ El kernel de Windows se llama **NT** y tampoco sirve. Pero Microsoft tomó otro 
 
 **Qué es WSL.** *Windows Subsystem for Linux*: el mecanismo oficial de Microsoft para correr Linux dentro de Windows. Vino en dos modos que conviven (por eso la columna `VERSION` cuando listás distros): **WSL 1** no tenía kernel de Linux — era un *traductor*: el kernel NT atendía los pedidos de los programas Linux haciéndose pasar por un kernel Linux; ingenioso, pero imitación incompleta, sin namespaces ni cgroups reales — **Docker no puede correr ahí**. **WSL 2** abandona la imitación: una **VM liviana** administrada por Windows, con un **kernel de Linux real** adentro (compilado por Microsoft) más la plomería mínima. Ojo: esa VM **no es "un Ubuntu"** — es Linux pelado, sin distro. Las distros van aparte, y acá está la pieza clave:
 
-**Qué es una "distro" en WSL — y qué no es.** Recordá la sección 1.1: distro = kernel + ajuar. En WSL, el kernel ya lo pone la VM, uno solo, compartido. Entonces los fabricantes (Canonical para Ubuntu, etc.) empaquetan versiones especiales de sus distros **sin el kernel**: básicamente el disco — el árbol de archivos completo con todo el séquito (`apt`, herramientas, configuración). Cuando "instalás Ubuntu en WSL", descargás ese disco y lo enchufás. Cuando lo abrís, WSL lanza sus procesos **sobre el kernel compartido, cada distro dentro de su propia burbuja** — su vista de archivos, sus procesos, su mundo. Una distro en WSL **no es una VM: es un disco enchufado más una burbuja.**
+**Qué es una "distro" en WSL — y qué no es.** Recordá la sección 1.1: distro = kernel + equipamiento. En WSL, el kernel ya lo pone la VM, uno solo, compartido. Entonces los fabricantes (Canonical para Ubuntu, etc.) empaquetan versiones especiales de sus distros **sin el kernel**: básicamente el disco — el árbol de archivos completo con todo el séquito (`apt`, herramientas, configuración). Cuando "instalás Ubuntu en WSL", descargás ese disco y lo enchufás. Cuando lo abrís, WSL lanza sus procesos **sobre el kernel compartido, cada distro dentro de su propia burbuja** — su vista de archivos, sus procesos, su mundo. Una distro en WSL **no es una VM: es un disco enchufado más una burbuja.**
 
 ```
    ┌────────────────────────────────────────────────────────┐
@@ -306,7 +315,7 @@ Las dos preguntas son la misma pregunta, y su respuesta es el invento más impor
 4. Namespaces y cgroups: ¿cuál responde "qué ve" y cuál "cuánto usa"? Dá dos ejemplos de cada uno. ¿Qué llama esta serie "burbuja"?
 5. Un proceso dentro de un container se ve como PID 1. ¿Qué ve el kernel del host cuando mira ese mismo proceso?
 6. ¿Cómo eliminan los cgroups el efecto bad neighbor? ¿Qué es el overcommit y qué se gana y se arriesga con él?
-7. Reconstruí de memoria la tabla VM vs container: qué virtualiza cada uno, kernel, arranque, overhead, recursos, aislamiento.
+7. Reconstruí de memoria la tabla VM vs container: dónde ocurre el truco en cada una, qué es lo falso y qué es real en cada caso, kernel, arranque, overhead, recursos, aislamiento. ¿Por qué "virtualización a nivel de sistema operativo" NO significa "fabricar un SO falso"?
 8. ¿Por qué LXC (2008) no se masificó y Docker (2013) sí?
 9. ¿Por qué en Mac y Windows hay una VM y en Ubuntu nativo no? ¿Cuántas VMs hacen falta para cien containers?
 10. En Windows con Docker andando: ¿cuántas VMs hay? ¿Cuántos kernels, y cuáles? ¿Qué es la distro `docker-desktop`, y por qué NO es "una VM adentro de otra"?
