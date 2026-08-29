@@ -46,6 +46,7 @@ Los comandos de esta serie son **shell Unix** y hay un único juego canónico �
 | 🖥️ **Según tu sistema** | El único punto donde Mac, Windows o Linux difieren. Todo lo que no lleva este bloque es idéntico en los tres. |
 | 🎓 **Para el parcial, si te preguntan** | Respuesta modelo lista, en formato examen |
 | `# ←` | Dentro de una salida de consola: la línea que importa y por qué |
+| `...` | Dentro de un comando o de una salida: **recorte** — "acá seguía más y no viene al caso". Jamás se tipea: no es sintaxis |
 
 *(Los archivos de setup son instrumentales: no llevan 🔴🟡🟢 ni 🎓 — nada de ellos entra en un parcial.)*
 

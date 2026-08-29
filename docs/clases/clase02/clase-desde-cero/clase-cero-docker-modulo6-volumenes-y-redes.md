@@ -66,6 +66,8 @@ El caso de uso estrella es el que te heló la espalda: **la base de datos**. El 
 
 ```console
 $ docker run -d --name mi-db -v datos-db:/var/lib/mysql  ... imagen-de-mysql
+# └─ los "..." son recorte de la serie (acá irían más flags, como la config del
+#    motor) — no son sintaxis, no se tipean. Ver la leyenda del roadmap.
 ```
 
 Y de regalo, la historia que muestra el poder completo: tenés esa base corriendo en la versión 5.7 del motor y querés pasar a la 8. Con el volumen, el upgrade es: `stop` al container viejo, `rm` sin miedo (¡los datos no están en él!), y un `run` de la imagen nueva **montando el mismo volumen** — el motor 8 arranca, encuentra los datos ahí, y sigue. El container era descartable; los datos, sagrados; el volumen es la frontera entre ambos.
@@ -80,6 +82,8 @@ $ docker volume prune             # barrer los volúmenes que ningún container 
 ```
 
 > ⚠️ **`docker rm` del container NO borra sus volúmenes — y es a propósito.** Es la gracia del invento: los datos sobreviven al descuido. La contracara: los volúmenes huérfanos se acumulan en silencio (el `docker system df` del módulo 5 los lista en su propia fila). Se limpian a conciencia con `volume rm` / `volume prune` — nunca por accidente.
+
+> ⚠️ **Un volumen, ¿cuántos containers? Se puede compartir — y para datos de una base, NO se debe.** Primero, una ortogonalidad que conviene fijar: **redes y volúmenes no se tocan** — la red conecta procesos, el volumen enchufa almacenamiento; un container de *cualquier* red puede montar *cualquier* volumen. Dicho eso: sí, dos containers pueden montar el mismo volumen a la vez (Docker no lo impide, y para **lecturas** es un patrón válido). Pero **dos motores de base de datos escribiendo sobre los mismos archivos = corrupción**: cada motor asume ser el único dueño — cachea, escribe a medias, reordena — y un segundo motor pisándole los archivos rompe todo. La regla de la industria: **un solo escritor por volumen de datos.** ¿Quién la hace cumplir? Nadie automático: **vos, con la arquitectura** — el archivo no tiene árbitro. (Y vale idéntico para bind mounts compartidos.)
 
 ## 3. 🔴 Tipo 2 — Bind mounts: una carpeta TUYA, adentro del container
 
@@ -107,7 +111,24 @@ Esa última línea es la potencia y el peligro en una: **no hay pared**. La carp
 
 Por eso existe el candado: agregando `:ro` (*read-only*) al final — `-v "$(pwd)/config":/config:ro` — el container puede leer pero no tocar. Para montar configuración, casi siempre lo que querés.
 
-🖥️ **Según tu sistema:** el bind mount es EL lugar donde las trampas de terminal muerden. En **Git Bash** (Windows), `$(pwd)` más rutas tipo `/mirador` disparan la traducción de rutas del setup (§2) — en la terminal de Ubuntu, cero drama. Y una perla de rendimiento para Windows: conviene que tus proyectos vivan **dentro del mundo de Ubuntu** (`~/proyectos/...`) y no en el disco de Windows vía `/mnt/c/...` — los bind mounts que cruzan esa frontera son notablemente más lentos.
+🖥️ **Según tu sistema:** el bind mount es EL lugar donde las trampas de terminal muerden. En **Git Bash** (Windows), `$(pwd)` más rutas tipo `/mirador` disparan la traducción de rutas del setup (§2) — en la terminal de Ubuntu, cero drama. Y una perla de rendimiento para Windows, **con su porqué**: conviene que tus proyectos vivan **dentro del mundo de Ubuntu** (`~/proyectos/...`) y no en el disco de Windows vía `/mnt/c/...`. El mapa del peaje:
+
+```
+   EN WINDOWS: dos mundos, una frontera
+   ~/proyectos  (mundo Ubuntu)              /mnt/c/...  (mundo Windows)
+   ┌──────────────────────────┐             ┌──────────────────────────┐
+   │ disco de la distro,      │             │ disco NTFS de Windows,   │
+   │ formato Linux nativo     │             │ administrado por NT      │
+   └────────────┬─────────────┘             └────────────┬─────────────┘
+                │ el kernel Linux                        │ el kernel Linux NO puede
+                │ lo lee DIRECTO                         │ leerlo directo: CADA operación
+                ▼                                        │ cruza la frontera de la VM
+      velocidad de disco local                           ▼ (pedido → Windows lo atiende
+                                                         → respuesta: protocolo tipo red)
+                                               velocidad de "disco de red"
+```
+
+`/mnt/c` no es una carpeta más: es **el disco de OTRO sistema operativo**, visto a través de la frontera de la VM mediante un protocolo de ida y vuelta (de la familia de los discos de red). Un archivo grande lo tolera; el problema es que **trabajar con código son miles de archivos chiquitos** — un `node_modules`, un build — y cada `abrir/leer/escribir` de cada archivito paga el peaje del viaje completo. Miles de archivos = miles de peajes. Dentro del mundo Ubuntu, en cambio, tus archivos y tus containers comparten el mismo kernel Linux: acceso directo, velocidad de disco local. **¿Y en Mac?** No existe la elección: tus archivos viven todos del lado de macOS, así que el bind mount cruza la frontera de la VM *siempre* — mismo tipo de peaje, con un puente que Docker optimizó mucho en los últimos años. Hay costo, pero no hay ruta alternativa que recomendar — por eso la perla es solo para Windows, el único con dos mundos entre los que elegir.
 
 ## 4. 🟡 Tipo 3 — tmpfs: la carpeta que vive en la RAM
 
@@ -154,6 +175,8 @@ $ docker run -d -v "$(pwd)/config.json":/app/config.json:ro mi-app:1.0
 ```
 
 Criterio rápido: valores sueltos → variables de entorno; configuración con estructura (un JSON, un YAML entero) → archivo montado `:ro`. Las dos puertas conviven sin drama.
+
+🟡 Un detalle de vida real para cerrar: las variables de entorno **se fijan al crear el container** — no se editan en caliente. ¿Cambió un valor? Se recrea el container con el `-e` nuevo (stop, rm, run — y en el mundo Compose del módulo 7 es todavía más simple: editás el `.env` y `docker compose up -d` recrea solo lo afectado). Suena drástico y es perfectamente coherente con la serie: los containers son descartables, recrearlos es gratis. Si necesitás configuración que cambie *sin* recrear, esa es justamente una ventaja de la puerta 2: si tu app relee su archivo montado, el cambio entra en vivo.
 
 ## 6. 🔴 Redes: el cierre del hilo H6 — hablarse por nombre
 
@@ -247,7 +270,7 @@ Mirá tu mano de cartas: una app en una imagen bien ordenada (M3-M5), una base c
 2. ¿Qué pasa con lo escrito en una ruta montada — pasa por la capa read-write, sufre copy-up, muere con el `rm`?
 3. Named volume: ¿quién lo administra, dónde vive, y cómo demostrarías con dos containers `--rm` que los datos lo sobreviven?
 4. Contá el upgrade de una base de datos (motor 5.7 → 8) usando un volumen. ¿Qué se descarta y qué se conserva?
-5. ¿Por qué `docker rm` NO borra los volúmenes del container, y por qué eso es una virtud con contracara? ¿Cómo se limpian?
+5. ¿Por qué `docker rm` NO borra los volúmenes del container, y por qué eso es una virtud con contracara? ¿Cómo se limpian? ¿Y cuántos *escritores* admite con seguridad un volumen de datos — quién es el árbitro de esa regla?
 6. Bind mount: ¿qué monta, cuál es su caso estrella en desarrollo, y cuál es su peligro simétrico? ¿Qué agrega `:ro`?
 7. En Windows: ¿dónde conviene que vivan tus proyectos para que los bind mounts vuelen, y por qué?
 8. ¿Qué es tmpfs, dónde viven sus datos, y para qué tipo de datos es la única opción correcta?

@@ -236,7 +236,7 @@ root@f3a91c07d2e8:/app# apt-get install -y procps
 ... Setting up procps ...                   # ← ahora sí
 ```
 
-⚠️ Trampa menor de regalo: el comando `ps` vive en un paquete que se llama **`procps`** — pedir "ps" a secas no lo encuentra. Y ahora, el momento para el que el módulo 2 te preparó:
+⚠️ Trampa menor de regalo: el comando `ps` vive en un paquete que se llama **`procps`** — pedir "ps" a secas no lo encuentra. (Y ya que está en escena, presentémoslo bien: **`ps aux`** es el censo de **procesos** de Linux — `a` = de todos los usuarios, `u` = formato detallado, `x` = incluso los que no tienen terminal. No lo confundas con `docker ps`: mismo apellido, familias distintas — `docker ps` lista *containers*, desde afuera; `ps aux` lista *procesos*, acá adentro.) Y ahora, el momento para el que el módulo 2 te preparó:
 
 ```console
 root@f3a91c07d2e8:/app# ps aux
@@ -371,7 +371,9 @@ La distinción merece marco:
 
 > ⚠️ **`stop` ≠ `rm`.** Stop detiene el proceso y conserva los datos de la capa read-write. Rm borra el container y sus datos, irreversiblemente. El descuido clásico es el inverso: creer que "ya lo paré" limpia — no: los `Exited` se acumulan (mirá tus hello-worlds), cada uno reteniendo su capa en disco. Limpieza fina: `docker rm serene_easley loving_ptolemy` (por nombre o ID). Limpieza gruesa y el medidor de cuánto ocupa todo: módulo 5.
 
-Dos yapas del día a día: `docker run --rm ...` crea un container que **se auto-borra** al terminar (ideal para pruebas de un solo uso — el `ls /app` de la sección 5 merecía un `--rm`), y `docker pause/unpause` congela y descongela un container vivo sin matarlo (existe, se usa poco).
+Dos yapas del día a día: `docker run --rm ...` crea un container que **se auto-borra** al terminar (ideal para pruebas de un solo uso — el `ls /app` de la sección 5 merecía un `--rm`), y `docker pause/unpause`, que merece su párrafo porque intriga a todo el mundo:
+
+🟡 **`pause` congela los procesos en el aire** — el kernel los deja clavados a mitad de instrucción. El container sigue "vivo" (su capa read-write, su red y su lugar en la guía telefónica siguen ahí), pero adentro nadie respira. La diferencia con `stop` se ve mejor **desde un vecino**: si tu app le pega a una base *pausada*, los requests **quedan colgados** esperando una respuesta que no llega (hasta que el timeout los mate) — el teléfono suena y suena en una casa donde todos están congelados; si la base está *parada* (`Exited`), la conexión **se rechaza al instante** — "número inexistente". En ambos casos el vecino sufre y debe saber reintentar; cambia el sabor del error. ¿Y para qué sirve? Casi nunca: casos nicho, como quitarle la CPU un rato a un container glotón sin matarlo, o congelar algo para inspeccionarlo con calma. Y no tiene nada que ver con suspender tu máquina (sección 6.1): eso congela la VM entera desde afuera; `pause` es un congelador quirúrgico, por container, manual.
 
 ### 6.1 🟡 ¿Y si se apaga todo? — cerrar Docker, suspender, apagar la máquina
 
@@ -428,7 +430,7 @@ Y quedan dos cuentas abiertas, a propósito:
 13. `docker run` esconde dos pasos: ¿cuáles, qué hace cada uno, y por qué "revivir" un Exited es uno de esos mismos comandos?
 14. Dibujá el ciclo de vida completo con el comando de cada transición. ¿Qué conserva `stop` y qué destruye `rm`?
 15. ¿Qué pasa con tus containers al cerrar Docker Desktop? ¿Al suspender la máquina? ¿En un apagado normal vs uno violento?
-16. ¿Para qué sirve `--rm` y en qué tipo de containers conviene?
+16. ¿Para qué sirve `--rm` y en qué tipo de containers conviene? ¿Y `pause` — qué congela exactamente, en qué se diferencia de `stop` visto desde un container vecino, y por qué se usa poco?
 
 ---
 
