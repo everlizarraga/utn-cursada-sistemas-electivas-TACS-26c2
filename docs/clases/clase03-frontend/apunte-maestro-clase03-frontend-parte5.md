@@ -248,7 +248,7 @@ Volvamos adentro de React, que hasta ahora es una caja negra "declarativa". Su u
                              └──────────────────────┘
 ```
 
-¿Y cómo se organizan las piezas? Adiviná: **en árbol** (el cuarto de la clase — HTML, DOM, AST, y ahora este):
+¿Y cómo se organizan las piezas? Adiviná: **en árbol** — uno más para la colección de la clase, después del HTML, el DOM, el AST, el CSSOM, el render tree y el virtual DOM:
 
 ```
                 <LoginPage />
@@ -306,6 +306,9 @@ El **estado** (*state*) es el dato **propio de un componente**, que puede cambia
 En el React moderno (funciones), el estado se declara con `useState`:
 
 ```jsx
+// Los ejemplos de React de esta parte asumen un proyecto React ya creado,
+// con esta línea al principio del archivo:  import { useState } from 'react';
+
 function ReactHooksExample() {
   // useState devuelve un ARRAY de dos cosas:
   //   [ el valor actual , la función para cambiarlo (el "setter") ]

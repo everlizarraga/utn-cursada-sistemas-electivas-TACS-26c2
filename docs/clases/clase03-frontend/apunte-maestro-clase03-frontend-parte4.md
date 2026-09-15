@@ -98,7 +98,7 @@ Si cada browser decide, ¿por qué la web no se atomizó en "esta página funcio
 
 - **WHATWG** — hace los estándares vivos de la web: DOM, HTML, las Web APIs. (Dato de color con moraleja: nació como un *fork* de W3C — hasta los organismos de estándares se bifurcan.)
 - **W3C** — revisa y aprueba los cambios.
-- **ECMA** — es la casa de **ECMAScript**: la especificación de un lenguaje que se comporta de cierta manera. JavaScript **es** una implementación *ECMAScript-compliant* — y no es la única: hay otros lenguajes que cumplen la misma spec.
+- **ECMA** — es la casa de **ECMAScript**: la especificación de un lenguaje que se comporta de cierta manera. JavaScript **es** una implementación *ECMAScript-compliant*: un lenguaje que cumple esa spec.
 
 La relación clave para fijar: **ECMAScript es el contrato; JavaScript, el producto**. Cuando en la Parte 3 dijimos que V8 y SpiderMonkey implementan "el mismo lenguaje", el árbitro de ese "mismo" es la spec de ECMA. Y esto no es un dato de trivia — es una herramienta de trabajo, como muestra la próxima sección.
 

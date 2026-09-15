@@ -17,7 +17,7 @@ No hay un único engine — cada vendor construyó el suyo (fiel al patrón de l
 
 - **V8** — desarrollado por Google, escrito en C++. Es el motor de Chrome… y de **Node.js**: cuando corrés JavaScript "en el servidor", estás corriendo el mismo motor, sacado del browser y puesto a trabajar solo. Este dato explica el "eco del lado del servidor" de la Parte 2.
 - **SpiderMonkey** — el motor de Firefox, de los primeros que existieron, con el creador del propio JavaScript involucrado en su desarrollo.
-- Y varios más (JavaScriptCore en Safari, etc.).
+- Y varios más — cada browser importante tiene el suyo.
 
 Cada motor implementa el mismo lenguaje — definido por un estándar llamado **ECMAScript**, que dice cómo debe comportarse JavaScript (quién lo escribe y qué pasa cuando los motores difieren igual: Parte 4). Lo que importa acá es la arquitectura: **un programa adentro del browser cuyo trabajo es traducir**.
 
@@ -289,11 +289,11 @@ Pregunta inevitable: tengo un procesador monstruoso, muchos núcleos — ¿JavaS
 
 ```
    Escalar VERTICAL (con límites)        Escalar HORIZONTAL (el camino JS)
-   ┌───────────────────────┐            ┌─────────┐ ┌─────────┐ ┌─────────┐
-   │  proceso JS           │            │ app ⟳   │ │ app ⟳   │ │ app ⟳   │
-   │  event loop ⟳         │            │(container│ │(container│ │(container│
-   │  + worker + worker…   │            └─────────┘ └─────────┘ └─────────┘
-   └───────────────────────┘              cada instancia: su event loop
+   ┌───────────────────────┐            ┌───────────┐ ┌───────────┐ ┌───────────┐
+   │  proceso JS           │            │  app ⟳    │ │  app ⟳    │ │  app ⟳    │
+   │  event loop ⟳         │            │(container)│ │(container)│ │(container)│
+   │  + worker + worker…   │            └───────────┘ └───────────┘ └───────────┘
+   └───────────────────────┘              cada instancia: su propio event loop
 ```
 
 > 🕳️ **Madriguera — La fauna de "workers"**
